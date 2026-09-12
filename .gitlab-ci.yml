@@ -83,6 +83,14 @@ publish:
         "${CI_REGISTRY_IMAGE}:amd64-${CI_COMMIT_SHA}" \
         "${CI_REGISTRY_IMAGE}:arm64-${CI_COMMIT_SHA}"
 
+    # Expose QUICHE_VERSION to the release job. GitLab expands the
+    # `release:` keyword's variables before the job's script runs, so the
+    # version has to arrive via a dotenv artifact rather than `export`.
+    - echo "RELEASE_VERSION=${QUICHE_VERSION}" >> release.env
+  artifacts:
+    reports:
+      dotenv: release.env
+
 # ── release ───────────────────────────────────────────────────────────────────
 
 release:
@@ -97,7 +105,6 @@ release:
   needs:
     - publish
   script:
-    - export RELEASE_VERSION=$(cat VERSION)
     - echo "Creating release $RELEASE_VERSION"
   release:
     tag_name: "$RELEASE_VERSION"
