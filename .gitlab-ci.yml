@@ -1,0 +1,104 @@
+stages:
+  - build
+  - publish
+  - release
+
+# ── build ─────────────────────────────────────────────────────────────────────
+
+.build-template:
+  stage: build
+  image: docker:29.8@sha256:5efed980cba3fc126cf54e21a5a6ff8849d05b6e0623d6e7612f48e9cd6cd17e
+  services:
+    - docker:29.8-dind@sha256:5efed980cba3fc126cf54e21a5a6ff8849d05b6e0623d6e7612f48e9cd6cd17e
+  rules:
+    - changes:
+        - Dockerfile
+        - VERSION
+        - build_quiche.sh
+  before_script:
+    - |
+      if [ -n "$CI_REGISTRY_PASSWORD" ]; then
+        docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+      fi
+    - docker buildx create --use
+  script:
+    - |
+      docker buildx build \
+        --platform "linux/${TARGET_ARCH}" \
+        --label org.opencontainers.image.created=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+        --label org.opencontainers.image.revision="${CI_COMMIT_SHA}" \
+        --cache-from=type=registry,ref="${CI_REGISTRY_IMAGE}:${TARGET_ARCH}-buildcache" \
+        --cache-to=type=registry,ref="${CI_REGISTRY_IMAGE}:${TARGET_ARCH}-buildcache",mode=max \
+        --tag "${CI_REGISTRY_IMAGE}:${TARGET_ARCH}-${CI_COMMIT_SHA}" \
+        --push \
+        .
+
+build:amd64:
+  extends: .build-template
+  tags:
+    - saas-linux-small-amd64
+  variables:
+    TARGET_ARCH: amd64
+
+build:arm64:
+  extends: .build-template
+  tags:
+    - saas-linux-small-arm64
+  variables:
+    TARGET_ARCH: arm64
+
+# ── publish ───────────────────────────────────────────────────────────────────
+
+publish:
+  stage: publish
+  image: docker:29.8@sha256:5efed980cba3fc126cf54e21a5a6ff8849d05b6e0623d6e7612f48e9cd6cd17e
+  services:
+    - docker:29.8-dind@sha256:5efed980cba3fc126cf54e21a5a6ff8849d05b6e0623d6e7612f48e9cd6cd17e
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - Dockerfile
+        - VERSION
+        - build_quiche.sh
+  needs:
+    - build:amd64
+    - build:arm64
+  before_script:
+    - |
+      if [ -n "$CI_REGISTRY_PASSWORD" ]; then
+        docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+      fi
+  script:
+    - export QUICHE_VERSION=$(cat VERSION)
+    - |
+      docker buildx imagetools create \
+        --tag "${CI_REGISTRY_IMAGE}:${QUICHE_VERSION}" \
+        "${CI_REGISTRY_IMAGE}:amd64-${CI_COMMIT_SHA}" \
+        "${CI_REGISTRY_IMAGE}:arm64-${CI_COMMIT_SHA}"
+
+    # Create/update the latest multi-architecture tag.
+    - |
+      docker buildx imagetools create \
+        --tag "${CI_REGISTRY_IMAGE}:latest" \
+        "${CI_REGISTRY_IMAGE}:amd64-${CI_COMMIT_SHA}" \
+        "${CI_REGISTRY_IMAGE}:arm64-${CI_COMMIT_SHA}"
+
+# ── release ───────────────────────────────────────────────────────────────────
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:v0.24.0@sha256:3f52d526f48e8d10625c722fa6d6423ee82aadeae1b1aa91f07b62551d96dacf
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - Dockerfile
+        - VERSION
+        - build_quiche.sh
+  needs:
+    - publish
+  script:
+    - export RELEASE_VERSION=$(cat VERSION)
+    - echo "Creating release $RELEASE_VERSION"
+  release:
+    tag_name: "$RELEASE_VERSION"
+    description: "pdns-util-quiche $RELEASE_VERSION"
