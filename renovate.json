@@ -4,6 +4,7 @@
     "config:recommended"
   ],
   "automerge": true,
+  "pinDigests": true,
   "prConcurrentLimit": 2,
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
@@ -27,12 +28,6 @@
     }
   ],
   "packageRules": [
-    {
-      "description": "Docker digest-only updates - pin for security without PRs",
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["digest"],
-      "enabled": false
-    },
     {
       "description": "quiche library - update VERSION file",
       "matchFileNames": [
