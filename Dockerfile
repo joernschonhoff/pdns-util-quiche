@@ -1,4 +1,4 @@
-FROM rust:1.99.0-trixie AS quiche-builder
+FROM rust:1.99.0-trixie@sha256:6ff07edce8775d0f64be7aba9197229407301bddf2054d62c27b541a6238a181 AS quiche-builder
 COPY VERSION /VERSION
 RUN QUICHE_VERSION=$(cat /VERSION) && test -n "${QUICHE_VERSION}" || { echo "QUICHE_VERSION build-arg is required"; exit 1; }
 
