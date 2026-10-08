@@ -54,8 +54,10 @@ build:arm64:
 delete_image:
   stage: cleanup
   needs:
-    - build:amd64
-    - build:arm64
+    - job: build:amd64
+      optional: true
+    - job: build:arm64
+      optional: true
   variables:
     REGCTL_VERSION: v0.11.6
   rules:
@@ -91,8 +93,10 @@ publish:
     - if: '$CI_COMMIT_TAG'
       when: always
   needs:
-    - build:amd64
-    - build:arm64
+    - job: build:amd64
+      optional: true
+    - job: build:arm64
+      optional: true
   before_script:
     - |
       if [ -n "$CI_REGISTRY_PASSWORD" ]; then
